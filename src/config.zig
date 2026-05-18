@@ -73,7 +73,7 @@ pub const PandaConfig = struct {
 
 pub fn parseConfig(allocator: std.mem.Allocator, path: []const u8) !PandaConfig {
     const file = std.fs.cwd().openFile(path, .{}) catch |e| {
-        std.log.err("无法读取配置文件 {s}: {s}", .{ path, @errorName(e) });
+        std.debug.print("ERROR: 无法读取配置文件 {s}: {s}\n", .{ path, @errorName(e) });
         return e;
     };
     defer file.close();

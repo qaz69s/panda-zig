@@ -47,7 +47,7 @@ fn fetchURL(allocator: std.mem.Allocator, url: []const u8, _: u64) ![]const u8 {
     try req.finish();
     try req.wait();
 
-    if (req.response.status != .ok) {
+    if (req.response.status.class() != .success) {
         return error.HttpNotOk;
     }
 
