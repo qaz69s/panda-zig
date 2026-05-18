@@ -21,7 +21,7 @@ pub fn main() !void {
         f.close();
     } else |e| {
         const stderr = std.io.getStdErr().writer();
-        stderr.print("WARN: cannot create log file {s}: {s}\n", .{ LOG_FILE, @errorName(e) }) catch {};
+        stderr.print("警告: 无法创建日志文件 {s}: {s}\n", .{ LOG_FILE, @errorName(e) }) catch {};
     }
 
     // Parse CLI args for config path
@@ -30,7 +30,7 @@ pub fn main() !void {
 
     const config_path = if (args.len > 1) args[1] else "/etc/config/panda-zig";
 
-    log("Panda Zig DDNS daemon started (config: {s})", .{config_path});
+    log("Panda Zig DDNS 守护进程已启动 (配置: {s})", .{config_path});
 
     // Signal handling (check running flag each second)
     var st = state.State.init(allocator);
@@ -48,7 +48,7 @@ pub fn main() !void {
         }
 
         if (!cfg.global.enabled) {
-            log("DDNS disabled, skipping update", .{});
+            log("DDNS 已禁用，跳过更新", .{});
             sleepSecs(cfg.global.interval);
             continue;
         }
@@ -74,14 +74,14 @@ pub fn main() !void {
         defer if (ipv6) |ip| allocator.free(ip);
 
         if (need_v4 and ipv4 == null) {
-            log("ERROR: cannot get IPv4 address", .{});
+            log("错误: 无法获取 IPv4 地址", .{});
         }
         if (need_v6 and ipv6 == null) {
-            log("ERROR: cannot get IPv6 address", .{});
+            log("错误: 无法获取 IPv6 地址", .{});
         }
 
-        if (ipv4) |ip| log("current IPv4: {s}", .{ip});
-        if (ipv6) |ip| log("current IPv6: {s}", .{ip});
+        if (ipv4) |ip| log("当前 IPv4: {s}", .{ip});
+        if (ipv6) |ip| log("当前 IPv6: {s}", .{ip});
 
         var updated: u32 = 0;
         var skipped: u32 = 0;
@@ -89,7 +89,7 @@ pub fn main() !void {
         for (cfg.entries.items) |*entry| {
             if (!entry.enabled) continue;
             if (entry.provider.len == 0) {
-                log("WARN: {s} has no provider set", .{entry.name});
+                log("警告: {s} 未设置服务商", .{entry.name});
                 continue;
             }
 
@@ -99,7 +99,7 @@ pub fn main() !void {
                     const key = try std.fmt.allocPrint(allocator, "{s}_{s}", .{ entry.name, "A" });
                     defer allocator.free(key);
                     if (st.isUnchanged(key, ip)) {
-                        log("{s} (IPv4): IP unchanged, skip", .{entry.name});
+                        log("{s} (IPv4): IP 未变，跳过", .{entry.name});
                         skipped += 1;
                     } else {
                         if (providers.update(allocator, entry, ip)) {
@@ -112,7 +112,7 @@ pub fn main() !void {
                     const key = try std.fmt.allocPrint(allocator, "{s}_{s}", .{ entry.name, "AAAA" });
                     defer allocator.free(key);
                     if (st.isUnchanged(key, ip)) {
-                        log("{s} (IPv6): IP unchanged, skip", .{entry.name});
+                        log("{s} (IPv6): IP 未变，跳过", .{entry.name});
                         skipped += 1;
                     } else {
                         var e2 = entry.*;
@@ -127,7 +127,7 @@ pub fn main() !void {
                 const ip = if (std.ascii.eqlIgnoreCase(entry.record_type, "A")) ipv4 else ipv6;
                 if (ip) |ip_val| {
                     if (st.isUnchanged(entry.name, ip_val)) {
-                        log("{s}: IP unchanged, skip", .{entry.name});
+                        log("{s}: IP 未变，跳过", .{entry.name});
                         skipped += 1;
                     } else {
                         if (providers.update(allocator, entry, ip_val)) {
@@ -136,19 +136,19 @@ pub fn main() !void {
                         }
                     }
                 } else {
-                    log("WARN: {s}: can't get IP address", .{entry.name});
+                    log("警告: {s}: 无法获取 IP 地址", .{entry.name});
                 }
             }
         }
 
         if (updated == 0 and skipped == 0) {
-            log("no enabled entries need update", .{});
+            log("无需更新（0 更新 0 跳过）", .{});
         }
 
         sleepSecs(cfg.global.interval);
     }
 
-    log("Panda Zig DDNS stopped", .{});
+    log("Panda Zig DDNS 已停止", .{});
 }
 
 fn log(comptime fmt: []const u8, args: anytype) void {
@@ -172,11 +172,11 @@ fn reloadConfig(allocator: std.mem.Allocator, path: []const u8, last_mtime: *u64
 
     if (mtime > last_mtime.*) {
         if (last_mtime.* != 0) {
-            log("UCI config changed, reloading", .{});
+            log("UCI 配置已变更，重新加载", .{});
         }
         last_mtime.* = mtime;
         return config.parseConfig(allocator, path) catch |e| {
-            log("ERROR: config parse failed: {s}", .{@errorName(e)});
+            log("错误: 配置解析失败: {s}", .{@errorName(e)});
             return null;
         };
     }
@@ -185,7 +185,7 @@ fn reloadConfig(allocator: std.mem.Allocator, path: []const u8, last_mtime: *u64
 
 fn parseConfigOrExit(allocator: std.mem.Allocator, path: []const u8) config.PandaConfig {
     return config.parseConfig(allocator, path) catch |e| {
-        log("ERROR: config parse failed: {s}", .{@errorName(e)});
+        log("错误: 配置解析失败: {s}", .{@errorName(e)});
         std.process.exit(1);
     };
 }

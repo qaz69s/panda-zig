@@ -8,7 +8,7 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
     const custom_headers_raw = entry.custom_headers;
 
     if (custom_url.len == 0) {
-        std.debug.print("Custom: no URL configured\n", .{});
+        std.debug.print("自定义: 未配置 URL\n", .{});
         return false;
     }
 
@@ -19,7 +19,7 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
     var remaining = custom_url;
     while (std.mem.indexOf(u8, remaining, "{{")) |brace_start| {
         url.appendSlice(remaining[0..brace_start]) catch {
-            std.debug.print("Custom: OOM\n", .{});
+            std.debug.print("自定义: 内存不足\n", .{});
             return false;
         };
         const brace_end = std.mem.indexOfScalarPos(u8, remaining, brace_start + 2, '}') orelse {
@@ -33,13 +33,13 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
             else if (std.mem.eql(u8, var_name, "type")) entry.record_type
             else remaining[brace_start .. brace_end + 2];
         url.appendSlice(replacement) catch {
-            std.debug.print("Custom: OOM\n", .{});
+            std.debug.print("自定义: 内存不足\n", .{});
             return false;
         };
         remaining = remaining[brace_end + 2 ..];
     }
     url.appendSlice(remaining) catch {
-        std.debug.print("Custom: OOM\n", .{});
+        std.debug.print("自定义: 内存不足\n", .{});
         return false;
     };
 
@@ -67,16 +67,16 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
 
     if (method == .GET) {
         _ = http.get(allocator, url.items, headers_list.items) catch |e| {
-            std.debug.print("Custom GET: {s} -> {s} failed: {s}\n", .{ entry.domain, ip, @errorName(e) });
+            std.debug.print("自定义 GET: {s} -> {s} 失败: {s}\n", .{ entry.domain, ip, @errorName(e) });
             return false;
         };
     } else {
         _ = http.put(allocator, url.items, ip, headers_list.items) catch |e| {
-            std.debug.print("Custom POST: {s} -> {s} failed: {s}\n", .{ entry.domain, ip, @errorName(e) });
+            std.debug.print("自定义 POST: {s} -> {s} 失败: {s}\n", .{ entry.domain, ip, @errorName(e) });
             return false;
         };
     }
 
-    std.debug.print("Custom: {s} -> {s}\n", .{ entry.domain, ip });
+    std.debug.print("自定义: {s} -> {s}\n", .{ entry.domain, ip });
     return true;
 }

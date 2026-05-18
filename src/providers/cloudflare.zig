@@ -9,11 +9,11 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
     const domain = entry.domain;
     const record_type = if (std.ascii.eqlIgnoreCase(entry.record_type, "BOTH")) "A" else entry.record_type;
 
-    if (token.len == 0) { std.debug.print("Cloudflare: token missing\n", .{}); return false; }
-    if (domain.len == 0) { std.debug.print("Cloudflare: domain missing\n", .{}); return false; }
+    if (token.len == 0) { std.debug.print("Cloudflare: 缺少 Token\n", .{}); return false; }
+    if (domain.len == 0) { std.debug.print("Cloudflare: 缺少域名\n", .{}); return false; }
 
     const bearer = std.fmt.allocPrint(allocator, "Bearer {s}", .{token}) catch {
-        std.debug.print("Cloudflare: OOM\n", .{}); return false;
+        std.debug.print("Cloudflare: 内存不足\n", .{}); return false;
     };
     defer allocator.free(bearer);
 
@@ -27,7 +27,7 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
         entry.cf_zone_id
     else blk: {
         const zone = autoDetectZone(allocator, domain, &headers) catch |e| {
-            std.debug.print("Cloudflare: auto-detect zone failed: {s}\n", .{@errorName(e)});
+            std.debug.print("Cloudflare: 自动检测 Zone 失败: {s}\n", .{@errorName(e)});
             return false;
         };
         break :blk zone;
@@ -36,43 +36,43 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
 
     // Step 1: Find DNS record ID
     const list_url = std.fmt.allocPrint(allocator, "{s}/zones/{s}/dns_records?name={s}&type={s}", .{ CF_API, zone_id, domain, record_type }) catch {
-        std.debug.print("Cloudflare: OOM\n", .{}); return false;
+        std.debug.print("Cloudflare: 内存不足\n", .{}); return false;
     };
     defer allocator.free(list_url);
 
     const list_body = http.get(allocator, list_url, &headers) catch |e| {
-        std.debug.print("Cloudflare: failed to list DNS records: {s}\n", .{@errorName(e)});
+        std.debug.print("Cloudflare: 查询 DNS 记录失败: {s}\n", .{@errorName(e)});
         return false;
     };
     defer allocator.free(list_body);
 
     const record_id = extractField(allocator, list_body, "id") catch |e| {
-        std.debug.print("Cloudflare: failed to parse DNS record list: {s}\n", .{@errorName(e)});
-        std.debug.print("Response: {s}\n", .{list_body});
+        std.debug.print("Cloudflare: 解析 DNS 记录列表失败: {s}\n", .{@errorName(e)});
+        std.debug.print("响应: {s}\n", .{list_body});
         return false;
     };
     defer allocator.free(record_id);
 
     if (record_id.len == 0) {
-        std.debug.print("Cloudflare: no existing DNS record found for {s} ({s})\n", .{ domain, record_type });
+        std.debug.print("Cloudflare: 未找到 {s} ({s}) 的 DNS 记录\n", .{ domain, record_type });
         return false;
     }
 
     // Step 2: Update DNS record
     const update_url = std.fmt.allocPrint(allocator, "{s}/zones/{s}/dns_records/{s}", .{ CF_API, zone_id, record_id }) catch {
-        std.debug.print("Cloudflare: OOM\n", .{}); return false;
+        std.debug.print("Cloudflare: 内存不足\n", .{}); return false;
     };
     defer allocator.free(update_url);
 
     const update_body = std.fmt.allocPrint(allocator, "{{\"type\":\"{s}\",\"name\":\"{s}\",\"content\":\"{s}\",\"ttl\":{d},\"proxied\":{s}}}", .{
         record_type, domain, ip, entry.ttl, if (entry.cf_proxied) "true" else "false",
     }) catch {
-        std.debug.print("Cloudflare: OOM\n", .{}); return false;
+        std.debug.print("Cloudflare: 内存不足\n", .{}); return false;
     };
     defer allocator.free(update_body);
 
     const update_resp = http.put(allocator, update_url, update_body, &headers) catch |e| {
-        std.debug.print("Cloudflare: failed to update DNS record: {s}\n", .{@errorName(e)});
+        std.debug.print("Cloudflare: 更新 DNS 记录失败: {s}\n", .{@errorName(e)});
         return false;
     };
     defer allocator.free(update_resp);

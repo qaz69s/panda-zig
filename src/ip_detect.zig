@@ -4,7 +4,7 @@ const http = @import("http.zig");
 pub fn detectIP(urls: []const []const u8, allocator: std.mem.Allocator) !?[]const u8 {
     for (urls) |url| {
         const result = http.get(allocator, url, &.{}) catch |e| {
-            std.debug.print("ip_detect: {s} failed: {s}\n", .{ url, @errorName(e) });
+            std.debug.print("IP 检测: {s} 失败: {s}\n", .{ url, @errorName(e) });
             continue;
         };
         defer allocator.free(result);
