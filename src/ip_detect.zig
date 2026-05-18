@@ -43,13 +43,17 @@ fn fetchURL(allocator: std.mem.Allocator, url: []const u8, _: u64) ![]const u8 {
     });
     defer req.deinit();
 
-    req.transfer_encoding = .chunked;
     try req.send();
+    try req.finish();
+    try req.wait();
+
+    if (req.response.status != .ok) {
+        return error.HttpNotOk;
+    }
 
     var body = std.ArrayList(u8).init(allocator);
     defer body.deinit();
 
-    // Use a simple read loop instead of timeout-based approach
     const reader = req.reader();
     var buf: [4096]u8 = undefined;
     while (true) {
@@ -59,11 +63,6 @@ fn fetchURL(allocator: std.mem.Allocator, url: []const u8, _: u64) ![]const u8 {
         };
         if (n == 0) break;
         body.appendSlice(buf[0..n]) catch {};
-    }
-
-    try req.finish();
-    if (req.response.status != .ok) {
-        return error.HttpNotOk;
     }
 
     return body.toOwnedSlice();

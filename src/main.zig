@@ -4,7 +4,7 @@ const ip_detect = @import("ip_detect.zig");
 const state = @import("state.zig");
 const providers = @import("providers/mod.zig");
 
-const LOG_FILE = "/var/log/panda-rust.log";
+const LOG_FILE = "/var/log/panda-zig.log";
 
 var running: bool = true;
 
