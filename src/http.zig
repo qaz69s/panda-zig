@@ -53,6 +53,46 @@ pub fn get(allocator: std.mem.Allocator, url: []const u8, extra_headers: []const
     return body.toOwnedSlice();
 }
 
+/// HTTP POST with form/JSON body, reads response body
+pub fn post(allocator: std.mem.Allocator, url: []const u8, body_str: []const u8, content_type: []const u8, extra_headers: []const Header) ![]const u8 {
+    var client: std.http.Client = .{
+        .allocator = allocator,
+        .ca_bundle = defaultCaBundle(allocator),
+    };
+    defer client.deinit();
+
+    const uri = try std.Uri.parse(url);
+    var header_buffer: [4096]u8 = undefined;
+
+    var req = try client.open(.POST, uri, .{ .server_header_buffer = &header_buffer });
+    defer req.deinit();
+
+    applyHeaders(&req, extra_headers);
+    if (content_type.len > 0) {
+        req.headers.content_type = .{ .override = content_type };
+    }
+
+    req.transfer_encoding = .{ .content_length = body_str.len };
+    try req.send();
+    if (body_str.len > 0) try req.writer().writeAll(body_str);
+    try req.finish();
+    try req.wait();
+
+    var resp_body = std.ArrayList(u8).init(allocator);
+    defer resp_body.deinit();
+    var buf: [4096]u8 = undefined;
+    while (true) {
+        const n = req.read(buf[0..]) catch |e| {
+            if (e == error.EndOfStream) break;
+            return e;
+        };
+        if (n == 0) break;
+        try resp_body.appendSlice(buf[0..n]);
+    }
+
+    return resp_body.toOwnedSlice();
+}
+
 /// HTTP PUT with JSON body, reads response body
 pub fn put(allocator: std.mem.Allocator, url: []const u8, body_str: []const u8, extra_headers: []const Header) ![]const u8 {
     var client: std.http.Client = .{
