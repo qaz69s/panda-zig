@@ -1,69 +1,66 @@
 const std = @import("std");
+const http = @import("http.zig");
 
 pub fn detectIP(urls: []const []const u8, allocator: std.mem.Allocator) !?[]const u8 {
     for (urls) |url| {
-        const result = try fetchURL(allocator, url, 10000);
+        const result = http.get(allocator, url, &.{}) catch |e| {
+            std.debug.print("ip_detect: {s} failed: {s}\n", .{ url, @errorName(e) });
+            continue;
+        };
         defer allocator.free(result);
 
-        if (std.mem.trim(u8, result, " \t\r\n").len == 0) continue;
-
-        const ip = try allocator.dupe(u8, std.mem.trim(u8, result, " \t\r\n"));
-
-        // Validate it looks like an IP
-        var has_dot = false;
-        var has_colon = false;
-        for (ip) |c| {
-            if (c == '.') has_dot = true;
-            if (c == ':') has_colon = true;
-        }
-
-        // Basic sanity: contains dot (IPv4) or colon (IPv6), no HTML
-        if (has_dot or has_colon) {
-            // Make sure it's not HTML
-            if (std.mem.indexOf(u8, ip, "<") == null and
-                std.mem.indexOf(u8, ip, ">") == null)
-            {
-                return ip;
-            }
-        }
-        allocator.free(ip);
+        // Extract IPv4 address from the response
+        if (extractIP(result, allocator)) |ip| return ip;
     }
     return null;
 }
 
-fn fetchURL(allocator: std.mem.Allocator, url: []const u8, _: u64) ![]const u8 {
-    var client: std.http.Client = .{ .allocator = allocator };
-    defer client.deinit();
-
-    const uri = try std.Uri.parse(url);
-    var server_header_buffer: [4096]u8 = undefined;
-
-    var req = try client.open(.GET, uri, .{
-        .server_header_buffer = &server_header_buffer,
-    });
-    defer req.deinit();
-
-    try req.send();
-    try req.finish();
-    try req.wait();
-
-    if (req.response.status.class() != .success) {
-        return error.HttpNotOk;
+/// Extract a valid IP address (IPv4 or IPv6) from a text response
+fn extractIP(text: []const u8, allocator: std.mem.Allocator) ?[]const u8 {
+    // Try to find an IPv4 address: xxx.xxx.xxx.xxx
+    var i: usize = 0;
+    while (i < text.len) : (i += 1) {
+        const c = text[i];
+        if (std.ascii.isDigit(c) or c == ':') {
+            var end = i;
+            while (end < text.len) : (end += 1) {
+                const ch = text[end];
+                if (!std.ascii.isAlphanumeric(ch) and ch != '.' and ch != ':') break;
+            }
+            const candidate = std.mem.trim(u8, text[i..end], " \t\r\n.:");
+            if (candidate.len > 0) {
+                // Check if it looks like an IP (has dot for IPv4 or colon for IPv6)
+                var has_dot = false;
+                var has_colon = false;
+                var is_good = true;
+                for (candidate) |ch| {
+                    if (ch == '.') has_dot = true;
+                    if (ch == ':') has_colon = true;
+                    if (ch == '<' or ch == '>') is_good = false;
+                }
+                if ((has_dot or has_colon) and is_good) {
+                    const ip = allocator.dupe(u8, candidate) catch continue;
+                    // Verify it's a reasonable IP format
+                    if (has_dot) {
+                        // IPv4: should have exactly 3 dots
+                        var dot_count: usize = 0;
+                        for (ip) |ch| {
+                            if (ch == '.') dot_count += 1;
+                        }
+                        if (dot_count == 3) return ip;
+                    } else {
+                        // IPv6: should have at least 2 colons
+                        var colon_count: usize = 0;
+                        for (ip) |ch| {
+                            if (ch == ':') colon_count += 1;
+                        }
+                        if (colon_count >= 2) return ip;
+                    }
+                    allocator.free(ip);
+                }
+            }
+            i = end;
+        }
     }
-
-    var body = std.ArrayList(u8).init(allocator);
-    defer body.deinit();
-
-    const reader = req.reader();
-    var buf: [4096]u8 = undefined;
-    while (true) {
-        const n = reader.read(&buf) catch |e| {
-            if (e == error.EndOfStream) break;
-            return e;
-        };
-        if (n == 0) break;
-        body.appendSlice(buf[0..n]) catch {};
-    }
-
-    return body.toOwnedSlice();
+    return null;
 }

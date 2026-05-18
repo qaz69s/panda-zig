@@ -12,6 +12,7 @@ pub const IpDetectConfig = struct {
     pub fn init(allocator: std.mem.Allocator) IpDetectConfig {
         var v4 = std.ArrayList([]const u8).init(allocator);
         var v6 = std.ArrayList([]const u8).init(allocator);
+        v4.append("https://api.ipify.org") catch {};
         v4.append("https://ddns.oray.com/checkip") catch {};
         v4.append("https://myip.ipip.net") catch {};
         v4.append("https://ip.3322.net") catch {};

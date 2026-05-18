@@ -14,6 +14,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    // Redirect stderr to log file (catches all std.debug.print output)
+    if (std.fs.cwd().createFile(LOG_FILE, .{ .read = true })) |f| {
+        const fd = f.handle;
+        _ = std.posix.dup2(fd, std.posix.STDERR_FILENO) catch {};
+        f.close();
+    } else |e| {
+        const stderr = std.io.getStdErr().writer();
+        stderr.print("WARN: cannot create log file {s}: {s}\n", .{ LOG_FILE, @errorName(e) }) catch {};
+    }
+
     // Parse CLI args for config path
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);

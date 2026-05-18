@@ -5,9 +5,24 @@ pub const Header = struct {
     value: []const u8,
 };
 
+fn defaultCaBundle(allocator: std.mem.Allocator) std.crypto.Certificate.Bundle {
+    var bundle = std.crypto.Certificate.Bundle{};
+    _ = std.crypto.Certificate.Bundle.addCertsFromFilePath(
+        &bundle, allocator, std.fs.cwd(), "/etc/ssl/certs/ca-certificates.crt",
+    ) catch {
+        _ = std.crypto.Certificate.Bundle.addCertsFromFilePath(
+            &bundle, allocator, std.fs.cwd(), "/etc/ssl/cert.pem",
+        ) catch {};
+    };
+    return bundle;
+}
+
 /// Simple HTTP GET, reads response body
 pub fn get(allocator: std.mem.Allocator, url: []const u8, extra_headers: []const Header) ![]const u8 {
-    var client: std.http.Client = .{ .allocator = allocator };
+    var client: std.http.Client = .{
+        .allocator = allocator,
+        .ca_bundle = defaultCaBundle(allocator),
+    };
     defer client.deinit();
 
     const uri = try std.Uri.parse(url);
@@ -40,7 +55,10 @@ pub fn get(allocator: std.mem.Allocator, url: []const u8, extra_headers: []const
 
 /// HTTP PUT with JSON body, reads response body
 pub fn put(allocator: std.mem.Allocator, url: []const u8, body_str: []const u8, extra_headers: []const Header) ![]const u8 {
-    var client: std.http.Client = .{ .allocator = allocator };
+    var client: std.http.Client = .{
+        .allocator = allocator,
+        .ca_bundle = defaultCaBundle(allocator),
+    };
     defer client.deinit();
 
     const uri = try std.Uri.parse(url);
@@ -51,13 +69,14 @@ pub fn put(allocator: std.mem.Allocator, url: []const u8, body_str: []const u8, 
 
     applyHeaders(&req, extra_headers);
 
+    // Set transfer encoding for body
+    req.transfer_encoding = .{ .content_length = body_str.len };
     try req.send();
     if (body_str.len > 0) try req.writer().writeAll(body_str);
     try req.finish();
     try req.wait();
 
-    if (req.response.status.class() != .success) return error.HttpNotOk;
-
+    // Read response body regardless of status
     var resp_body = std.ArrayList(u8).init(allocator);
     defer resp_body.deinit();
     var buf: [4096]u8 = undefined;
@@ -69,6 +88,9 @@ pub fn put(allocator: std.mem.Allocator, url: []const u8, body_str: []const u8, 
         if (n == 0) break;
         try resp_body.appendSlice(buf[0..n]);
     }
+
+    if (req.response.status.class() != .success) return error.HttpNotOk;
+
     return resp_body.toOwnedSlice();
 }
 
