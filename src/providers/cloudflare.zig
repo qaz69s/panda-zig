@@ -54,8 +54,32 @@ pub fn update(allocator: std.mem.Allocator, entry: *const config.DdnsEntry, ip: 
     defer allocator.free(record_id);
 
     if (record_id.len == 0) {
-        std.debug.print("Cloudflare: 未找到 {s} ({s}) 的 DNS 记录\n", .{ domain, record_type });
-        return false;
+        // Record does not exist — create it via POST
+        const create_url = std.fmt.allocPrint(allocator, "{s}/zones/{s}/dns_records", .{ CF_API, zone_id }) catch {
+            std.debug.print("Cloudflare: 内存不足\\n", .{}); return false;
+        };
+        defer allocator.free(create_url);
+
+        const create_body = std.fmt.allocPrint(allocator, "{{\"type\":\"{s}\",\"name\":\"{s}\",\"content\":\"{s}\",\"ttl\":{d},\"proxied\":{s}}}", .{
+            record_type, domain, ip, entry.ttl, if (entry.cf_proxied) "true" else "false",
+        }) catch {
+            std.debug.print("Cloudflare: 内存不足\\n", .{}); return false;
+        };
+        defer allocator.free(create_body);
+
+        const headers_with_ct = [_]http.Header{
+            .{ .name = "Authorization", .value = bearer },
+            .{ .name = "Content-Type", .value = "application/json" },
+        };
+
+        const create_resp = http.post(allocator, create_url, create_body, "application/json", &headers_with_ct) catch |e| {
+            std.debug.print("Cloudflare: 创建 DNS 记录失败: {s}\\n", .{@errorName(e)});
+            return false;
+        };
+        defer allocator.free(create_resp);
+
+        std.debug.print("Cloudflare: 创建 {s} ({s}) -> {s}\\n", .{ domain, record_type, ip });
+        return true;
     }
 
     // Step 2: Update DNS record
