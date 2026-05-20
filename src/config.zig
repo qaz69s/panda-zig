@@ -6,8 +6,12 @@ pub const GlobalConfig = struct {
 };
 
 pub const IpDetectConfig = struct {
+    ipv4_get_type: []const u8 = "url",
+    ipv6_get_type: []const u8 = "url",
     ipv4_urls: std.ArrayList([]const u8),
     ipv6_urls: std.ArrayList([]const u8),
+    ipv4_iface: []const u8 = "",
+    ipv6_iface: []const u8 = "",
 
     pub fn init(allocator: std.mem.Allocator) IpDetectConfig {
         var v4 = std.ArrayList([]const u8).init(allocator);
@@ -24,12 +28,21 @@ pub const IpDetectConfig = struct {
         v6.append("https://api6.ipify.org") catch {};
         v6.append("https://ipv6.ident.me") catch {};
         v6.append("https://v6.ipinfo.io/ip") catch {};
-        return .{ .ipv4_urls = v4, .ipv6_urls = v6 };
+        return .{
+            .ipv4_get_type = "url",
+            .ipv6_get_type = "url",
+            .ipv4_urls = v4,
+            .ipv6_urls = v6,
+            .ipv4_iface = "",
+            .ipv6_iface = "",
+        };
     }
 
     pub fn deinit(self: *IpDetectConfig) void {
         self.ipv4_urls.deinit();
         self.ipv6_urls.deinit();
+        if (self.ipv4_iface.len > 0) std.heap.page_allocator.free(self.ipv4_iface);
+        if (self.ipv6_iface.len > 0) std.heap.page_allocator.free(self.ipv6_iface);
     }
 };
 
@@ -183,6 +196,12 @@ fn flushSection(
                 global.interval = std.fmt.parseInt(u64, v, 10) catch 300;
             }
         } else if (std.mem.eql(u8, n, "ip_detect")) {
+            if (getOpt(opts, "ipv4_get_type")) |v| {
+                ip_detect.ipv4_get_type = allocator.dupe(u8, v) catch "url";
+            }
+            if (getOpt(opts, "ipv6_get_type")) |v| {
+                ip_detect.ipv6_get_type = allocator.dupe(u8, v) catch "url";
+            }
             if (opts.get("ipv4_urls")) |urls| {
                 if (urls.items.len > 0) {
                     ip_detect.ipv4_urls.clearRetainingCapacity();
@@ -200,6 +219,12 @@ fn flushSection(
                         ip_detect.ipv6_urls.append(dup) catch {};
                     }
                 }
+            }
+            if (getOpt(opts, "ipv4_iface")) |v| {
+                ip_detect.ipv4_iface = allocator.dupe(u8, v) catch "";
+            }
+            if (getOpt(opts, "ipv6_iface")) |v| {
+                ip_detect.ipv6_iface = allocator.dupe(u8, v) catch "";
             }
         }
     } else if (std.mem.eql(u8, t, "ddns_entry") or std.mem.eql(u8, t, "ddns_entry_rust") or std.mem.eql(u8, t, "ddns_entry_zig")) {

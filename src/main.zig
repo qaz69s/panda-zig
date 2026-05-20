@@ -64,12 +64,26 @@ pub fn main() !void {
 
         // Fetch IPs
         const ipv4 = if (need_v4) blk: {
-            break :blk ip_detect.detectIP(cfg.ip_detect.ipv4_urls.items, allocator) catch null;
+            var ip: ?[]const u8 = null;
+            if (std.mem.eql(u8, cfg.ip_detect.ipv4_get_type, "netInterface") and cfg.ip_detect.ipv4_iface.len > 0) {
+                std.debug.print("IPv4 从网卡 {s} 获取\n", .{cfg.ip_detect.ipv4_iface});
+                ip = ip_detect.detectIPFromIface(cfg.ip_detect.ipv4_iface, allocator, false) catch null;
+            } else {
+                ip = ip_detect.detectIP(cfg.ip_detect.ipv4_urls.items, allocator) catch null;
+            }
+            break :blk ip;
         } else null;
         defer if (ipv4) |ip| allocator.free(ip);
 
         const ipv6 = if (need_v6) blk: {
-            break :blk ip_detect.detectIP(cfg.ip_detect.ipv6_urls.items, allocator) catch null;
+            var ip: ?[]const u8 = null;
+            if (std.mem.eql(u8, cfg.ip_detect.ipv6_get_type, "netInterface") and cfg.ip_detect.ipv6_iface.len > 0) {
+                std.debug.print("IPv6 从网卡 {s} 获取\n", .{cfg.ip_detect.ipv6_iface});
+                ip = ip_detect.detectIPFromIface(cfg.ip_detect.ipv6_iface, allocator, true) catch null;
+            } else {
+                ip = ip_detect.detectIP(cfg.ip_detect.ipv6_urls.items, allocator) catch null;
+            }
+            break :blk ip;
         } else null;
         defer if (ipv6) |ip| allocator.free(ip);
 
