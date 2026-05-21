@@ -45,7 +45,7 @@ fn detectIPv4FromIface(ifname: []const u8, allocator: std.mem.Allocator) !?[]con
     const ip_raw = addr_in.addr;
 
     // Convert to dotted decimal string
-    const bytes: [4]u8 = @bitCast(@byteSwap(ip_raw));
+    const bytes: [4]u8 = @bitCast(ip_raw);
     const ip_str = try std.fmt.allocPrint(allocator, "{d}.{d}.{d}.{d}", .{
         bytes[0], bytes[1], bytes[2], bytes[3],
     });
